@@ -1,15 +1,29 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 
+// Initialize the API with your key
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
 export async function POST(req) {
+  if (!process.env.GEMINI_API_KEY) {
+    return new Response(
+      JSON.stringify({ error: "Gemini API key is not configured" }),
+      { status: 500 }
+    )
+  }
+
   try {
     const { messages } = await req.json()
+    if (!messages || !Array.isArray(messages)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid messages format" }),
+        { status: 400 }
+      )
+    }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-exp-03-25" })
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" })
 
     const chat = model.startChat({
-      history: messages.map((msg) => ({
+      history: messages.slice(0, -1).map((msg) => ({
         role: msg.role === "assistant" ? "model" : msg.role,
         parts: [{ text: msg.content }],
       })),
@@ -17,13 +31,16 @@ export async function POST(req) {
 
     const result = await chat.sendMessage(inputFromMessages(messages))
     const response = await result.response
-    const text = await response.text() // ✅ `await` was missing here
+    const text = response.text()
 
     return Response.json({ reply: text })
   } catch (error) {
     console.error("Gemini error:", error)
     return new Response(
-      JSON.stringify({ error: "Something went wrong with Gemini API" }),
+      JSON.stringify({ 
+        error: "Failed to get response from Gemini",
+        details: error.message 
+      }),
       { status: 500 }
     )
   }
